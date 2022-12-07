@@ -1,10 +1,9 @@
 package kzgceremony
 
 import (
-	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/crypto/bls12381"
+	bls12381 "github.com/kilic/bls12-381"
 )
 
 // todo: unify addition & multiplicative notation in the comments
@@ -58,8 +57,9 @@ func tau(randomness []byte) *toxicWaste {
 	tau := new(big.Int).Mod(
 		new(big.Int).SetBytes(randomness),
 		g2.Q())
+	tau_Fr := bls12381.NewFr().FromBytes(tau.Bytes())
 	TauG2 := g2.New()
-	g2.MulScalar(TauG2, g2.One(), tau)
+	g2.MulScalar(TauG2, g2.One(), tau_Fr)
 
 	return &toxicWaste{tau, TauG2}
 }
@@ -70,15 +70,17 @@ func computeContribution(t *toxicWaste, prevSRS *SRS) *SRS {
 	g2 := bls12381.NewG2()
 	Q := g1.Q() // Q = |G1| == |G2|
 
-	fmt.Println("Computing [τ'⁰]₁, [τ'¹]₁, [τ'²]₁, ..., [τ'ⁿ⁻¹]₁, for n =", len(prevSRS.G1s))
+	// fmt.Println("Computing [τ'⁰]₁, [τ'¹]₁, [τ'²]₁, ..., [τ'ⁿ⁻¹]₁, for n =", len(prevSRS.G1s))
 	for i := 0; i < len(prevSRS.G1s); i++ {
 		tau_i := new(big.Int).Exp(t.tau, big.NewInt(int64(i)), Q)
-		g1.MulScalar(srs.G1s[i], prevSRS.G1s[i], tau_i)
+		tau_i_Fr := bls12381.NewFr().FromBytes(tau_i.Bytes())
+		g1.MulScalar(srs.G1s[i], prevSRS.G1s[i], tau_i_Fr)
 	}
-	fmt.Println("Computing [τ'⁰]₂, [τ'¹]₂, [τ'²]₂, ..., [τ'ⁿ⁻¹]₂, for n =", len(prevSRS.G2s))
+	// fmt.Println("Computing [τ'⁰]₂, [τ'¹]₂, [τ'²]₂, ..., [τ'ⁿ⁻¹]₂, for n =", len(prevSRS.G2s))
 	for i := 0; i < len(prevSRS.G2s); i++ {
 		tau_i := new(big.Int).Exp(t.tau, big.NewInt(int64(i)), Q)
-		g2.MulScalar(srs.G2s[i], prevSRS.G2s[i], tau_i)
+		tau_i_Fr := bls12381.NewFr().FromBytes(tau_i.Bytes())
+		g2.MulScalar(srs.G2s[i], prevSRS.G2s[i], tau_i_Fr)
 	}
 
 	return srs
@@ -87,7 +89,8 @@ func computeContribution(t *toxicWaste, prevSRS *SRS) *SRS {
 func genProof(toxicWaste *toxicWaste, prevSRS, newSRS *SRS) *Proof {
 	g1 := bls12381.NewG1()
 	G1_p := g1.New()
-	g1.MulScalar(G1_p, prevSRS.G1s[1], toxicWaste.tau) // g_1^{tau'} = g_1^{p * tau}, where p=toxicWaste.tau
+	tau_Fr := bls12381.NewFr().FromBytes(toxicWaste.tau.Bytes())
+	g1.MulScalar(G1_p, prevSRS.G1s[1], tau_Fr) // g_1^{tau'} = g_1^{p * tau}, where p=toxicWaste.tau
 
 	return &Proof{toxicWaste.TauG2, G1_p}
 }
@@ -110,7 +113,7 @@ func Contribute(prevSRS *SRS, randomness []byte) (Contribution, error) {
 func Verify(prevSRS, newSRS *SRS, proof *Proof) bool {
 	g1 := bls12381.NewG1()
 	g2 := bls12381.NewG2()
-	pairing := bls12381.NewPairingEngine()
+	pairing := bls12381.NewEngine()
 
 	// 1. check that elements of the newSRS are valid points
 	for i := 0; i < len(newSRS.G1s); i++ {

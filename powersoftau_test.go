@@ -6,7 +6,7 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
-func TestContribute(t *testing.T) {
+func TestContribution(t *testing.T) {
 	c := qt.New(t)
 
 	srs_0 := newEmptySRS(10, 10)

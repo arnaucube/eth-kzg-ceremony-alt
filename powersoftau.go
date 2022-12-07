@@ -7,11 +7,17 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 )
 
+// todo: unify addition & multiplicative notation in the comments
+
+// Contribution contains the SRS with its Proof
 type Contribution struct {
 	SRS   *SRS
 	Proof *Proof
 }
 
+// SRS contains the powers of tau in G1 & G2, eg.
+// [τ'⁰]₁, [τ'¹]₁, [τ'²]₁, ..., [τ'ⁿ⁻¹]₁,
+// [τ'⁰]₂, [τ'¹]₂, [τ'²]₂, ..., [τ'ⁿ⁻¹]₂
 type SRS struct {
 	G1s []*bls12381.PointG1
 	G2s []*bls12381.PointG2
@@ -22,6 +28,7 @@ type toxicWaste struct {
 	TauG2 *bls12381.PointG2
 }
 
+// Proof contains g₂ᵖ and g₂^τ', used by the verifier
 type Proof struct {
 	G2P    *bls12381.PointG2 // g₂ᵖ
 	G1PTau *bls12381.PointG1 // g₂^τ' = g₂^{p ⋅ τ}
@@ -85,7 +92,8 @@ func genProof(toxicWaste *toxicWaste, prevSRS, newSRS *SRS) *Proof {
 	return &Proof{toxicWaste.TauG2, G1_p}
 }
 
-// Contribute
+// Contribute takes as input the previous SRS and a random byte slice, and
+// returns the new SRS together with the Proof
 func Contribute(prevSRS *SRS, randomness []byte) (Contribution, error) {
 	// set tau from randomness
 	tw := tau(randomness)
@@ -97,14 +105,80 @@ func Contribute(prevSRS *SRS, randomness []byte) (Contribution, error) {
 	return Contribution{SRS: newSRS, Proof: proof}, nil
 }
 
+// Verify checks the correct computation of the new SRS respectively from the
+// previous SRS
 func Verify(prevSRS, newSRS *SRS, proof *Proof) bool {
 	g1 := bls12381.NewG1()
+	g2 := bls12381.NewG2()
+	pairing := bls12381.NewPairingEngine()
 
-	// check proof.G1PTau == newSRS.G1s[1]
+	// 1. check that elements of the newSRS are valid points
+	for i := 0; i < len(newSRS.G1s); i++ {
+		// i) non-empty
+		if newSRS.G1s[i] == nil {
+			return false
+		}
+		// ii) non-zero
+		if g1.IsZero(newSRS.G1s[i]) {
+			return false
+		}
+		// iii) in the correct prime order of subgroups
+		if !g1.IsOnCurve(newSRS.G1s[i]) {
+			return false
+		}
+		if !g1.InCorrectSubgroup(newSRS.G1s[i]) {
+			return false
+		}
+	}
+	for i := 0; i < len(newSRS.G2s); i++ {
+		// i) non-empty
+		if newSRS.G2s[i] == nil {
+			return false
+		}
+		// ii) non-zero
+		if g2.IsZero(newSRS.G2s[i]) {
+			return false
+		}
+		// iii) in the correct prime order of subgroups
+		if !g2.IsOnCurve(newSRS.G2s[i]) {
+			return false
+		}
+		if !g2.InCorrectSubgroup(newSRS.G2s[i]) {
+			return false
+		}
+	}
+
+	// 2. check proof.G1PTau == newSRS.G1s[1]
 	if !g1.Equal(proof.G1PTau, newSRS.G1s[1]) {
 		return false
 	}
 
-	// WIP!
+	// 3. check newSRS.G1s[1] (g₁^τ'), is correctly related to prevSRS.G1s[1] (g₁^τ)
+	//   e([τ]₁, [p]₂) == e([τ']₁, [1]₂)
+	e0 := pairing.AddPair(prevSRS.G1s[1], proof.G2P).Result()
+	e1 := pairing.AddPair(newSRS.G1s[1], g2.One()).Result()
+	if !e0.Equal(e1) {
+		return false
+	}
+
+	// 4. check newSRS following the powers of tau structure
+	for i := 0; i < len(newSRS.G1s)-1; i++ {
+		// i) e([τ'ⁱ]₁, [τ']₂) == e([τ'ⁱ⁺¹]₁, [1]₂), for i ∈ [1, n−1]
+		e0 := pairing.AddPair(newSRS.G1s[i], newSRS.G2s[1]).Result()
+		e1 := pairing.AddPair(newSRS.G1s[i+1], g2.One()).Result()
+		if !e0.Equal(e1) {
+			return false
+		}
+	}
+
+	for i := 0; i < len(newSRS.G2s)-1; i++ {
+		// ii) e([τ']₁, [τ'ʲ]₂) == e([1]₁, [τ'ʲ⁺¹]₂), for j ∈ [1, m−1]
+		e3 := pairing.AddPair(newSRS.G1s[1], newSRS.G2s[i]).Result()
+		e4 := pairing.AddPair(g1.One(), newSRS.G2s[i+1]).Result()
+		if !e3.Equal(e4) {
+			return false
+		}
+	}
+
 	return true
 }

@@ -1,13 +1,15 @@
 package kzgceremony
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 )
 
 type Contribution struct {
-	SRS *SRS
+	SRS   *SRS
+	Proof *Proof
 }
 
 type SRS struct {
@@ -18,6 +20,11 @@ type SRS struct {
 type toxicWaste struct {
 	tau   *big.Int
 	TauG2 *bls12381.PointG2
+}
+
+type Proof struct {
+	G2P    *bls12381.PointG2 // g₂ᵖ
+	G1PTau *bls12381.PointG1 // g₂^τ' = g₂^{p ⋅ τ}
 }
 
 // newEmptySRS creates an empty SRS
@@ -56,16 +63,26 @@ func computeContribution(t *toxicWaste, prevSRS *SRS) *SRS {
 	g2 := bls12381.NewG2()
 	Q := g1.Q() // Q = |G1| == |G2|
 
+	fmt.Println("Computing [τ'⁰]₁, [τ'¹]₁, [τ'²]₁, ..., [τ'ⁿ⁻¹]₁, for n =", len(prevSRS.G1s))
 	for i := 0; i < len(prevSRS.G1s); i++ {
 		tau_i := new(big.Int).Exp(t.tau, big.NewInt(int64(i)), Q)
 		g1.MulScalar(srs.G1s[i], prevSRS.G1s[i], tau_i)
 	}
+	fmt.Println("Computing [τ'⁰]₂, [τ'¹]₂, [τ'²]₂, ..., [τ'ⁿ⁻¹]₂, for n =", len(prevSRS.G2s))
 	for i := 0; i < len(prevSRS.G2s); i++ {
 		tau_i := new(big.Int).Exp(t.tau, big.NewInt(int64(i)), Q)
 		g2.MulScalar(srs.G2s[i], prevSRS.G2s[i], tau_i)
 	}
 
 	return srs
+}
+
+func genProof(toxicWaste *toxicWaste, prevSRS, newSRS *SRS) *Proof {
+	g1 := bls12381.NewG1()
+	G1_p := g1.New()
+	g1.MulScalar(G1_p, prevSRS.G1s[1], toxicWaste.tau) // g_1^{tau'} = g_1^{p * tau}, where p=toxicWaste.tau
+
+	return &Proof{toxicWaste.TauG2, G1_p}
 }
 
 // Contribute
@@ -75,5 +92,19 @@ func Contribute(prevSRS *SRS, randomness []byte) (Contribution, error) {
 
 	newSRS := computeContribution(tw, prevSRS)
 
-	return Contribution{SRS: newSRS}, nil
+	proof := genProof(tw, prevSRS, newSRS)
+
+	return Contribution{SRS: newSRS, Proof: proof}, nil
+}
+
+func Verify(prevSRS, newSRS *SRS, proof *Proof) bool {
+	g1 := bls12381.NewG1()
+
+	// check proof.G1PTau == newSRS.G1s[1]
+	if !g1.Equal(proof.G1PTau, newSRS.G1s[1]) {
+		return false
+	}
+
+	// WIP!
+	return true
 }

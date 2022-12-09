@@ -9,6 +9,8 @@ import (
 
 // todo: unify addition & multiplicative notation in the comments
 
+const MinRandomnessLen = 64
+
 type Witness struct {
 	RunningProducts []*bls12381.PointG1
 	PotPubKeys      []*bls12381.PointG2
@@ -26,6 +28,16 @@ type State struct {
 	Transcripts                []Transcript
 	ParticipantIDs             []string // WIP
 	ParticipantECDSASignatures []string
+}
+
+type Contribution struct {
+	NumG1Powers uint64
+	NumG2Powers uint64
+	PowersOfTau *SRS
+	PotPubKey   *bls12381.PointG2
+}
+type BatchContribution struct {
+	Contributions []Contribution
 }
 
 func (cs *State) Contribute(randomness []byte) (*State, error) {
@@ -48,10 +60,29 @@ func (cs *State) Contribute(randomness []byte) (*State, error) {
 			append(cs.Transcripts[i].Witness.PotPubKeys, proof.G2P)
 		ns.Transcripts[i].Witness.BLSSignatures = cs.Transcripts[i].Witness.BLSSignatures
 	}
-	ns.ParticipantIDs = cs.ParticipantIDs
+	ns.ParticipantIDs = cs.ParticipantIDs // TODO add github id (id_token.sub)
 	ns.ParticipantECDSASignatures = cs.ParticipantECDSASignatures
 
 	return &ns, nil
+}
+
+func (pb *BatchContribution) Contribute(randomness []byte) (*BatchContribution, error) {
+	nb := BatchContribution{}
+	nb.Contributions = make([]Contribution, len(pb.Contributions))
+	for i := 0; i < len(pb.Contributions); i++ {
+		nb.Contributions[i].NumG1Powers = pb.Contributions[i].NumG1Powers
+		nb.Contributions[i].NumG2Powers = pb.Contributions[i].NumG2Powers
+
+		newSRS, proof, err := Contribute(pb.Contributions[i].PowersOfTau, randomness)
+		if err != nil {
+			return nil, err
+		}
+		nb.Contributions[i].PowersOfTau = newSRS
+
+		nb.Contributions[i].PotPubKey = proof.G2P
+	}
+
+	return &nb, nil
 }
 
 // SRS contains the powers of tau in G1 & G2, eg.
@@ -138,7 +169,7 @@ func genProof(toxicWaste *toxicWaste, prevSRS, newSRS *SRS) *Proof {
 // Contribute takes as input the previous SRS and a random
 // byte slice, and returns the new SRS together with the Proof
 func Contribute(prevSRS *SRS, randomness []byte) (*SRS, *Proof, error) {
-	if len(randomness) < 64 {
+	if len(randomness) < MinRandomnessLen {
 		return nil, nil, fmt.Errorf("err randomness") // WIP
 	}
 	// set tau from randomness

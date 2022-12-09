@@ -9,7 +9,7 @@ Ethereum will run the Ceremony which will be used at least in [EIP-4844](https:/
 
 Probably most of the contributions will be generated with the same code (official impl, which has been audited). The idea of this repo is to try to bring more diversity to the table with another independent implementation.
 
-This implementation has been done without looking at the other impls code (neither the python reference nor the rust impl (except for the points parsers test vectors)), in order to not be biased by that code.
+This implementation has been done without looking at the other impls code (except for the point parsers test vectors), in order to not be biased by that code.
 
 > This code has not been audited, use it at your own risk.
 

@@ -18,3 +18,17 @@ Why in Go? Ideally would have done this code using Rust & arkworks, but the offi
 Documents used for this implementation:
 - [KZG10-Ceremony-audit-report.pdf, section *3.1 Overview of PoT ceremonies*](https://github.com/ethereum/kzg-ceremony/blob/main/KZG10-Ceremony-audit-report.pdf)
 - [*Why and how zkSNARKs work*, by Maksym Petkus](https://arxiv.org/abs/1906.07221v1)
+
+### Usage
+Go into the `cmd` dir, and run:
+```
+> go run cmd.go
+
+eth-kzg-ceremony-alt
+====================
+
+Usage of /tmp/go-build4278582969/b001/exe/cmd:
+  -u, --url string       sequencer url (default "https://kzg-ceremony-sequencer-dev.fly.dev")
+  -r, --rand string      randomness
+  -s, --sleeptime uint   time (seconds) sleeping before trying again to be the next contributor (default 10)
+```

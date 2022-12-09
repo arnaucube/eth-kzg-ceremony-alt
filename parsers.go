@@ -57,6 +57,7 @@ func (s *State) UnmarshalJSON(b []byte) error {
 			return err
 		}
 	}
+	// TODO validate data (G1 & G2 subgroup checks, etc)
 	return err
 }
 
@@ -92,6 +93,61 @@ func (s State) MarshalJSON() ([]byte, error) {
 	return json.Marshal(sStr)
 }
 
+func (c *BatchContribution) UnmarshalJSON(b []byte) error {
+	var cStr batchContributionStr
+	if err := json.Unmarshal(b, &cStr); err != nil {
+		return err
+	}
+	var err error
+	g2 := bls12381.NewG2()
+
+	c.Contributions = make([]Contribution, len(cStr.Contributions))
+	for i := 0; i < len(cStr.Contributions); i++ {
+		c.Contributions[i].NumG1Powers = cStr.Contributions[i].NumG1Powers
+		c.Contributions[i].NumG2Powers = cStr.Contributions[i].NumG2Powers
+		c.Contributions[i].PowersOfTau = &SRS{}
+		c.Contributions[i].PowersOfTau.G1Powers, err =
+			stringsToPointsG1(cStr.Contributions[i].PowersOfTau.G1Powers)
+		if err != nil {
+			return err
+		}
+		c.Contributions[i].PowersOfTau.G2Powers, err =
+			stringsToPointsG2(cStr.Contributions[i].PowersOfTau.G2Powers)
+		if err != nil {
+			return err
+		}
+
+		g2sBytes, err := hex.DecodeString(strings.TrimPrefix(cStr.Contributions[i].PotPubKey, "0x"))
+		if err != nil {
+			return err
+		}
+		c.Contributions[i].PotPubKey, err = g2.FromCompressed(g2sBytes)
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (c BatchContribution) MarshalJSON() ([]byte, error) {
+	var cStr batchContributionStr
+	g2 := bls12381.NewG2()
+
+	cStr.Contributions = make([]contributionStr, len(c.Contributions))
+	for i := 0; i < len(c.Contributions); i++ {
+		cStr.Contributions[i].NumG1Powers = c.Contributions[i].NumG1Powers
+		cStr.Contributions[i].NumG2Powers = c.Contributions[i].NumG2Powers
+		cStr.Contributions[i].PowersOfTau = powersOfTauStr{}
+		cStr.Contributions[i].PowersOfTau.G1Powers =
+			g1PointsToStrings(c.Contributions[i].PowersOfTau.G1Powers)
+		cStr.Contributions[i].PowersOfTau.G2Powers =
+			g2PointsToStrings(c.Contributions[i].PowersOfTau.G2Powers)
+
+		cStr.Contributions[i].PotPubKey = "0x" + hex.EncodeToString(g2.ToCompressed(c.Contributions[i].PotPubKey))
+	}
+	return json.Marshal(cStr)
+}
+
 type powersOfTauStr struct {
 	G1Powers []string `json:"G1Powers"`
 	G2Powers []string `json:"G2Powers"`
@@ -108,6 +164,17 @@ type transcriptStr struct {
 	NumG2Powers uint64         `json:"numG2Powers"`
 	PowersOfTau powersOfTauStr `json:"powersOfTau"`
 	Witness     witnessStr     `json:"witness"`
+}
+
+type contributionStr struct {
+	NumG1Powers uint64         `json:"numG1Powers"`
+	NumG2Powers uint64         `json:"numG2Powers"`
+	PowersOfTau powersOfTauStr `json:"powersOfTau"`
+	PotPubKey   string         `json:"potPubkey"`
+}
+
+type batchContributionStr struct {
+	Contributions []contributionStr `json:"contributions"`
 }
 
 type stateStr struct {

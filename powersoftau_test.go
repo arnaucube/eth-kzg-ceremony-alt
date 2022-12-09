@@ -2,6 +2,7 @@ package kzgceremony
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -42,4 +43,22 @@ func TestComputeNewState(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 	err = ioutil.WriteFile("new_state.json", b, 0600)
 	c.Assert(err, qt.IsNil)
+}
+
+func TestBatchContribution(t *testing.T) {
+	c := qt.New(t)
+	j, err := ioutil.ReadFile("batch_contribution_10.json")
+	c.Assert(err, qt.IsNil)
+
+	bc := &BatchContribution{}
+	err = json.Unmarshal(j, bc)
+	c.Assert(err, qt.IsNil)
+
+	nb, err :=
+		bc.Contribute([]byte("1111111111111111111111111111111111111111111111111111111111111111"))
+	c.Assert(err, qt.IsNil)
+
+	b, err := json.Marshal(nb)
+	c.Assert(err, qt.IsNil)
+	fmt.Println(string(b))
 }

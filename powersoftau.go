@@ -7,14 +7,37 @@ import (
 	bls12381 "github.com/kilic/bls12-381"
 )
 
-// todo: unify addition & multiplicative notation in the comments
-
+// MinRandomnessLen is the minimum accepted length for the user defined
+// randomness
 const MinRandomnessLen = 64
 
-type Witness struct {
-	RunningProducts []*bls12381.PointG1
-	PotPubKeys      []*bls12381.PointG2
-	BLSSignatures   []*bls12381.PointG1
+var g1 *bls12381.G1
+var g2 *bls12381.G2
+
+func init() {
+	g1 = bls12381.NewG1()
+	g2 = bls12381.NewG2()
+}
+
+// State represents the data structure obtained from the Sequencer at the
+// /info/current_state endpoint
+type State struct {
+	Transcripts                []Transcript
+	ParticipantIDs             []string // WIP
+	ParticipantECDSASignatures []string
+}
+
+// BatchContribution represents the data structure obtained from the Sequencer
+// at the /contribute endpoint
+type BatchContribution struct {
+	Contributions []Contribution
+}
+
+type Contribution struct {
+	NumG1Powers uint64
+	NumG2Powers uint64
+	PowersOfTau *SRS
+	PotPubKey   *bls12381.PointG2
 }
 
 type Transcript struct {
@@ -24,22 +47,33 @@ type Transcript struct {
 	Witness     *Witness
 }
 
-type State struct {
-	Transcripts                []Transcript
-	ParticipantIDs             []string // WIP
-	ParticipantECDSASignatures []string
+type Witness struct {
+	RunningProducts []*bls12381.PointG1
+	PotPubKeys      []*bls12381.PointG2
+	BLSSignatures   []*bls12381.PointG1
 }
 
-type Contribution struct {
-	NumG1Powers uint64
-	NumG2Powers uint64
-	PowersOfTau *SRS
-	PotPubKey   *bls12381.PointG2
-}
-type BatchContribution struct {
-	Contributions []Contribution
+// SRS contains the powers of tau in G1 & G2, eg.
+// [τ'⁰]₁, [τ'¹]₁, [τ'²]₁, ..., [τ'ⁿ⁻¹]₁,
+// [τ'⁰]₂, [τ'¹]₂, [τ'²]₂, ..., [τ'ⁿ⁻¹]₂
+type SRS struct {
+	G1Powers []*bls12381.PointG1
+	G2Powers []*bls12381.PointG2
 }
 
+type toxicWaste struct {
+	tau   *big.Int
+	TauG2 *bls12381.PointG2 // Proof.G2P
+}
+
+// Proof contains g₂ᵖ and g₂^τ', used by the verifier
+type Proof struct {
+	G2P    *bls12381.PointG2 // g₂ᵖ
+	G1PTau *bls12381.PointG1 // g₂^τ' = g₂^{p ⋅ τ}
+}
+
+// Contribute takes the last State and computes a new State using the defined
+// randomness
 func (cs *State) Contribute(randomness []byte) (*State, error) {
 	ns := State{}
 	ns.Transcripts = make([]Transcript, len(cs.Transcripts))
@@ -66,6 +100,8 @@ func (cs *State) Contribute(randomness []byte) (*State, error) {
 	return &ns, nil
 }
 
+// Contribute takes the last BatchContribution and computes a new
+// BatchContribution using the defined randomness
 func (pb *BatchContribution) Contribute(randomness []byte) (*BatchContribution, error) {
 	nb := BatchContribution{}
 	nb.Contributions = make([]Contribution, len(pb.Contributions))
@@ -85,46 +121,21 @@ func (pb *BatchContribution) Contribute(randomness []byte) (*BatchContribution, 
 	return &nb, nil
 }
 
-// SRS contains the powers of tau in G1 & G2, eg.
-// [τ'⁰]₁, [τ'¹]₁, [τ'²]₁, ..., [τ'ⁿ⁻¹]₁,
-// [τ'⁰]₂, [τ'¹]₂, [τ'²]₂, ..., [τ'ⁿ⁻¹]₂
-type SRS struct {
-	G1Powers []*bls12381.PointG1
-	G2Powers []*bls12381.PointG2
-}
-
-type toxicWaste struct {
-	tau   *big.Int
-	TauG2 *bls12381.PointG2
-}
-
-// Proof contains g₂ᵖ and g₂^τ', used by the verifier
-type Proof struct {
-	G2P    *bls12381.PointG2 // g₂ᵖ
-	G1PTau *bls12381.PointG1 // g₂^τ' = g₂^{p ⋅ τ}
-}
-
-// newEmptySRS creates an empty SRS
+// newEmptySRS creates an empty SRS filled by [1]₁ & [1]₂ points in all
+// respective arrays positions
 func newEmptySRS(nG1, nG2 int) *SRS {
 	g1s := make([]*bls12381.PointG1, nG1)
 	g2s := make([]*bls12381.PointG2, nG2)
-	g1 := bls12381.NewG1()
-	g2 := bls12381.NewG2()
-	// one_G1 := g1.One()
-	// one_G2 := g2.One()
 	for i := 0; i < nG1; i++ {
 		g1s[i] = g1.One()
-		// g1.MulScalar(g1s[i], one_G1, big.NewInt(int64(i)))
 	}
 	for i := 0; i < nG2; i++ {
 		g2s[i] = g2.One()
-		// g2.MulScalar(g2s[i], one_G2, big.NewInt(int64(i)))
 	}
 	return &SRS{g1s, g2s}
 }
 
 func tau(randomness []byte) *toxicWaste {
-	g2 := bls12381.NewG2()
 	tau := new(big.Int).Mod(
 		new(big.Int).SetBytes(randomness),
 		g2.Q())
@@ -137,8 +148,6 @@ func tau(randomness []byte) *toxicWaste {
 
 func computeContribution(t *toxicWaste, prevSRS *SRS) *SRS {
 	srs := newEmptySRS(len(prevSRS.G1Powers), len(prevSRS.G2Powers))
-	g1 := bls12381.NewG1()
-	g2 := bls12381.NewG2()
 	Q := g1.Q() // Q = |G1| == |G2|
 
 	// fmt.Println("Computing [τ'⁰]₁, [τ'¹]₁, [τ'²]₁, ..., [τ'ⁿ⁻¹]₁, for n =", len(prevSRS.G1s))
@@ -158,7 +167,6 @@ func computeContribution(t *toxicWaste, prevSRS *SRS) *SRS {
 }
 
 func genProof(toxicWaste *toxicWaste, prevSRS, newSRS *SRS) *Proof {
-	g1 := bls12381.NewG1()
 	G1_p := g1.New()
 	tau_Fr := bls12381.NewFr().FromBytes(toxicWaste.tau.Bytes())
 	g1.MulScalar(G1_p, prevSRS.G1Powers[1], tau_Fr) // g_1^{tau'} = g_1^{p * tau}, where p=toxicWaste.tau
@@ -182,45 +190,57 @@ func Contribute(prevSRS *SRS, randomness []byte) (*SRS, *Proof, error) {
 	return newSRS, proof, nil
 }
 
+func checkG1PointCorrectness(p *bls12381.PointG1) error {
+	// i) non-empty
+	if p == nil {
+		return fmt.Errorf("empty point value")
+	}
+	// ii) non-zero
+	if g1.IsZero(p) {
+		return fmt.Errorf("point can not be zero")
+	}
+	// iii) in the correct prime order of subgroups
+	if !g1.IsOnCurve(p) {
+		return fmt.Errorf("point not on curve")
+	}
+	if !g1.InCorrectSubgroup(p) {
+		return fmt.Errorf("point not in the correct prime order of subgroups")
+	}
+	return nil
+}
+
+func checkG2PointCorrectness(p *bls12381.PointG2) error {
+	// i) non-empty
+	if p == nil {
+		return fmt.Errorf("empty point value")
+	}
+	// ii) non-zero
+	if g2.IsZero(p) {
+		return fmt.Errorf("point can not be zero")
+	}
+	// iii) in the correct prime order of subgroups
+	if !g2.IsOnCurve(p) {
+		return fmt.Errorf("point not on curve")
+	}
+	if !g2.InCorrectSubgroup(p) {
+		return fmt.Errorf("point not in the correct prime order of subgroups")
+	}
+	return nil
+}
+
 // Verify checks the correct computation of the new SRS respectively from the
 // previous SRS
 func Verify(prevSRS, newSRS *SRS, proof *Proof) bool {
-	g1 := bls12381.NewG1()
-	g2 := bls12381.NewG2()
 	pairing := bls12381.NewEngine()
 
 	// 1. check that elements of the newSRS are valid points
 	for i := 0; i < len(newSRS.G1Powers); i++ {
-		// i) non-empty
-		if newSRS.G1Powers[i] == nil {
-			return false
-		}
-		// ii) non-zero
-		if g1.IsZero(newSRS.G1Powers[i]) {
-			return false
-		}
-		// iii) in the correct prime order of subgroups
-		if !g1.IsOnCurve(newSRS.G1Powers[i]) {
-			return false
-		}
-		if !g1.InCorrectSubgroup(newSRS.G1Powers[i]) {
+		if err := checkG1PointCorrectness(newSRS.G1Powers[i]); err != nil {
 			return false
 		}
 	}
 	for i := 0; i < len(newSRS.G2Powers); i++ {
-		// i) non-empty
-		if newSRS.G2Powers[i] == nil {
-			return false
-		}
-		// ii) non-zero
-		if g2.IsZero(newSRS.G2Powers[i]) {
-			return false
-		}
-		// iii) in the correct prime order of subgroups
-		if !g2.IsOnCurve(newSRS.G2Powers[i]) {
-			return false
-		}
-		if !g2.InCorrectSubgroup(newSRS.G2Powers[i]) {
+		if err := checkG2PointCorrectness(newSRS.G2Powers[i]); err != nil {
 			return false
 		}
 	}

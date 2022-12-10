@@ -9,6 +9,8 @@ import (
 	bls12381 "github.com/kilic/bls12-381"
 )
 
+// UnmarshalJSON implements the State json unmarshaler, compatible
+// with the official Ethereum KZG Ceremony formats
 func (s *State) UnmarshalJSON(b []byte) error {
 	var sStr stateStr
 	if err := json.Unmarshal(b, &sStr); err != nil {
@@ -57,10 +59,11 @@ func (s *State) UnmarshalJSON(b []byte) error {
 			return err
 		}
 	}
-	// TODO validate data (G1 & G2 subgroup checks, etc)
 	return err
 }
 
+// MarshalJSON implements the State json marshaler, compatible with the
+// official Ethereum KZG Ceremony formats
 func (s State) MarshalJSON() ([]byte, error) {
 	var sStr stateStr
 	sStr.ParticipantIDs = s.ParticipantIDs
@@ -93,13 +96,14 @@ func (s State) MarshalJSON() ([]byte, error) {
 	return json.Marshal(sStr)
 }
 
+// UnmarshalJSON implements the BatchContribution json unmarshaler, compatible
+// with the official Ethereum KZG Ceremony formats
 func (c *BatchContribution) UnmarshalJSON(b []byte) error {
 	var cStr batchContributionStr
 	if err := json.Unmarshal(b, &cStr); err != nil {
 		return err
 	}
 	var err error
-	g2 := bls12381.NewG2()
 
 	c.Contributions = make([]Contribution, len(cStr.Contributions))
 	for i := 0; i < len(cStr.Contributions); i++ {
@@ -129,9 +133,10 @@ func (c *BatchContribution) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// MarshalJSON implements the BatchContribution json marshaler, compatible
+// with the official Ethereum KZG Ceremony formats
 func (c BatchContribution) MarshalJSON() ([]byte, error) {
 	var cStr batchContributionStr
-	g2 := bls12381.NewG2()
 
 	cStr.Contributions = make([]contributionStr, len(c.Contributions))
 	for i := 0; i < len(c.Contributions); i++ {
@@ -143,7 +148,8 @@ func (c BatchContribution) MarshalJSON() ([]byte, error) {
 		cStr.Contributions[i].PowersOfTau.G2Powers =
 			g2PointsToStrings(c.Contributions[i].PowersOfTau.G2Powers)
 
-		cStr.Contributions[i].PotPubKey = "0x" + hex.EncodeToString(g2.ToCompressed(c.Contributions[i].PotPubKey))
+		cStr.Contributions[i].PotPubKey = "0x" +
+			hex.EncodeToString(g2.ToCompressed(c.Contributions[i].PotPubKey))
 	}
 	return json.Marshal(cStr)
 }
@@ -184,7 +190,6 @@ type stateStr struct {
 }
 
 func g1PointsToStrings(points []*bls12381.PointG1) []string {
-	g1 := bls12381.NewG1() // TODO unify g1 instantiation (& g2)
 	n := len(points)
 	g1s := make([]string, n)
 	for i := 0; i < n; i++ {
@@ -198,7 +203,6 @@ func g1PointsToStrings(points []*bls12381.PointG1) []string {
 }
 
 func g2PointsToStrings(points []*bls12381.PointG2) []string {
-	g2 := bls12381.NewG2()
 	n := len(points)
 	g2s := make([]string, n)
 	for i := 0; i < n; i++ {
@@ -211,8 +215,10 @@ func g2PointsToStrings(points []*bls12381.PointG2) []string {
 	return g2s
 }
 
+// stringsToPointsG1 parses the strings that represent the G1 points in the
+// ZCash compressed format into bls12381.PointG1 data structure. Additionally
+// it checks the points correctness
 func stringsToPointsG1(s []string) ([]*bls12381.PointG1, error) {
-	g1 := bls12381.NewG1() // TODO unify g1 instantiation (& g2)
 	n := len(s)
 	g1s := make([]*bls12381.PointG1, n)
 	for i := 0; i < n; i++ {
@@ -227,12 +233,18 @@ func stringsToPointsG1(s []string) ([]*bls12381.PointG1, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := checkG1PointCorrectness(g1s_i); err != nil {
+			return nil, err
+		}
 		g1s[i] = g1s_i
 	}
 	return g1s, nil
 }
+
+// stringsToPointsG2 parses the strings that represent the G2 points in the
+// ZCash compressed format into bls12381.PointG2 data structure. Additionally
+// it checks the points correctness
 func stringsToPointsG2(s []string) ([]*bls12381.PointG2, error) {
-	g2 := bls12381.NewG2()
 	n := len(s)
 	g2s := make([]*bls12381.PointG2, n)
 	for i := 0; i < n; i++ {
@@ -245,6 +257,9 @@ func stringsToPointsG2(s []string) ([]*bls12381.PointG2, error) {
 		}
 		g2s_i, err := g2.FromCompressed(g2sBytes)
 		if err != nil {
+			return nil, err
+		}
+		if err := checkG2PointCorrectness(g2s_i); err != nil {
 			return nil, err
 		}
 		g2s[i] = g2s_i

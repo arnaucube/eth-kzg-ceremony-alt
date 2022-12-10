@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"kzgceremony"
 	"net/http"
+
+	kzgceremony "github.com/arnaucube/eth-kzg-ceremony-alt"
 )
 
 type Client struct {

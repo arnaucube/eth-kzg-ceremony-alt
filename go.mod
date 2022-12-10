@@ -1,4 +1,4 @@
-module kzgceremony
+module github.com/arnaucube/eth-kzg-ceremony-alt
 
 go 1.19
 

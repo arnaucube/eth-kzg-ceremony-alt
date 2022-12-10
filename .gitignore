@@ -1,5 +1,6 @@
+bin
 parsed_state.json
 new_state.json
-cmd/prevBatchContribution.json
-cmd/contribution.json
-cmd/contribution_receipt.json
+prevBatchContribution.json
+contribution.json
+contribution_receipt.json

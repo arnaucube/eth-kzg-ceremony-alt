@@ -2,7 +2,6 @@ package kzgceremony
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -58,7 +57,6 @@ func TestBatchContribution(t *testing.T) {
 		bc.Contribute([]byte("1111111111111111111111111111111111111111111111111111111111111111"))
 	c.Assert(err, qt.IsNil)
 
-	b, err := json.Marshal(nb)
+	_, err = json.Marshal(nb)
 	c.Assert(err, qt.IsNil)
-	fmt.Println(string(b))
 }

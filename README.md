@@ -13,22 +13,28 @@ This implementation has been done without looking at the other impls code (excep
 
 > This code has not been audited, use it at your own risk.
 
-Why in Go? Ideally would have done this code using Rust & arkworks, but the official impl already uses that.
+Why in Go? Ideally would have done this code using Rust & arkworks, but the official impl already uses that. This implementation uses [Kilic's BLS12-381 pairing implementation](https://github.com/kilic/bls12-381).
 
 Documents used for this implementation:
 - [KZG10-Ceremony-audit-report.pdf, section *3.1 Overview of PoT ceremonies*](https://github.com/ethereum/kzg-ceremony/blob/main/KZG10-Ceremony-audit-report.pdf)
 - [*Why and how zkSNARKs work*, by Maksym Petkus](https://arxiv.org/abs/1906.07221v1)
 
 ### Usage
-Go into the `cmd` dir, and run:
+Get the binary from the [releases](https://github.com/arnaucube/eth-kzg-ceremony-alt/releases) (alternative you can compile it from source), and run:
 ```
-> go run cmd.go
+> ./kzgceremony
 
 eth-kzg-ceremony-alt
 ====================
 
-Usage of /tmp/go-build4278582969/b001/exe/cmd:
+Usage of ./kzgceremony:
   -u, --url string       sequencer url (default "https://kzg-ceremony-sequencer-dev.fly.dev")
   -r, --rand string      randomness
   -s, --sleeptime uint   time (seconds) sleeping before trying again to be the next contributor (default 10)
 ```
+
+So for example, run your contribution with:
+```
+./kzgceremony -r "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod"
+```
+(where the "Lorem ipsum..." is your source of randomness)

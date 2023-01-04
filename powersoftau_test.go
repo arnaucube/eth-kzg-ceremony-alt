@@ -13,13 +13,13 @@ func TestContribution(t *testing.T) {
 
 	srs_0 := newEmptySRS(10, 10)
 
-	srs_1, proof_1, err := Contribute(srs_0,
+	srs_1, proof_1, err := Contribute(srs_0, 0,
 		[]byte("1111111111111111111111111111111111111111111111111111111111111111"))
 	c.Assert(err, qt.IsNil)
 
 	c.Assert(Verify(srs_0, srs_1, proof_1), qt.IsTrue)
 
-	srs_2, proof_2, err := Contribute(srs_1,
+	srs_2, proof_2, err := Contribute(srs_1, 0,
 		[]byte("2222222222222222222222222222222222222222222222222222222222222222"))
 	c.Assert(err, qt.IsNil)
 	c.Assert(Verify(srs_1, srs_2, proof_2), qt.IsTrue)

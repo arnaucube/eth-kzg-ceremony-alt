@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"golang.org/x/crypto/blake2b"
+
 	bls12381 "github.com/kilic/bls12-381"
 )
 
@@ -81,7 +83,7 @@ func (cs *State) Contribute(randomness []byte) (*State, error) {
 		ns.Transcripts[i].NumG1Powers = cs.Transcripts[i].NumG1Powers
 		ns.Transcripts[i].NumG2Powers = cs.Transcripts[i].NumG2Powers
 
-		newSRS, proof, err := Contribute(cs.Transcripts[i].PowersOfTau, randomness)
+		newSRS, proof, err := Contribute(cs.Transcripts[i].PowersOfTau, i, randomness)
 		if err != nil {
 			return nil, err
 		}
@@ -109,7 +111,7 @@ func (pb *BatchContribution) Contribute(randomness []byte) (*BatchContribution, 
 		nb.Contributions[i].NumG1Powers = pb.Contributions[i].NumG1Powers
 		nb.Contributions[i].NumG2Powers = pb.Contributions[i].NumG2Powers
 
-		newSRS, proof, err := Contribute(pb.Contributions[i].PowersOfTau, randomness)
+		newSRS, proof, err := Contribute(pb.Contributions[i].PowersOfTau, i, randomness)
 		if err != nil {
 			return nil, err
 		}
@@ -135,9 +137,10 @@ func newEmptySRS(nG1, nG2 int) *SRS {
 	return &SRS{g1s, g2s}
 }
 
-func tau(randomness []byte) *toxicWaste {
+func tau(round int, randomness []byte) *toxicWaste {
+	val := blake2b.Sum256(randomness)
 	tau := new(big.Int).Mod(
-		new(big.Int).SetBytes(randomness),
+		new(big.Int).SetBytes(val[:]),
 		g2.Q())
 	tau_Fr := bls12381.NewFr().FromBytes(tau.Bytes())
 	TauG2 := g2.New()
@@ -176,12 +179,12 @@ func genProof(toxicWaste *toxicWaste, prevSRS, newSRS *SRS) *Proof {
 
 // Contribute takes as input the previous SRS and a random
 // byte slice, and returns the new SRS together with the Proof
-func Contribute(prevSRS *SRS, randomness []byte) (*SRS, *Proof, error) {
+func Contribute(prevSRS *SRS, round int, randomness []byte) (*SRS, *Proof, error) {
 	if len(randomness) < MinRandomnessLen {
 		return nil, nil, fmt.Errorf("err randomness") // WIP
 	}
 	// set tau from randomness
-	tw := tau(randomness)
+	tw := tau(round, randomness)
 
 	newSRS := computeContribution(tw, prevSRS)
 

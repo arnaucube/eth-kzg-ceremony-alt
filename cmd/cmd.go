@@ -17,7 +17,8 @@ import (
 
 func main() {
 	fmt.Println("eth-kzg-ceremony-alt")
-	fmt.Printf("====================\n\n")
+	fmt.Printf("====================\n")
+	fmt.Printf("            https://github.com/arnaucube/eth-kzg-ceremony-alt\n\n")
 
 	redB := color.New(color.FgRed, color.Bold)
 	cyan := color.New(color.FgCyan)
@@ -29,7 +30,7 @@ func main() {
 	var randomness string
 	var sleepTime uint64
 	flag.StringVarP(&sequencerURL, "url", "u",
-		"https://kzg-ceremony-sequencer-dev.fly.dev", "sequencer url")
+		"https://sequencer.ceremony.ethereum.org", "sequencer url")
 	flag.StringVarP(&randomness, "rand", "r",
 		"", fmt.Sprintf("randomness, needs to be bigger than %d", kzgceremony.MinRandomnessLen))
 	flag.Uint64VarP(&sleepTime, "sleeptime", "s",

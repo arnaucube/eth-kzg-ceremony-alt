@@ -19,6 +19,9 @@ Documents used for this implementation:
 - [KZG10-Ceremony-audit-report.pdf, section *3.1 Overview of PoT ceremonies*](https://github.com/ethereum/kzg-ceremony/blob/main/KZG10-Ceremony-audit-report.pdf)
 - [*Why and how zkSNARKs work*, by Maksym Petkus](https://arxiv.org/abs/1906.07221v1)
 
+
+You can find more info on the logic behind the powers of tau computation & verification in these notes: http://arnaucube.com/blog/powersoftau.html
+
 ### Usage
 Get the binary from the [releases](https://github.com/arnaucube/eth-kzg-ceremony-alt/releases) (alternative you can compile it from source), and run:
 ```
@@ -28,9 +31,9 @@ eth-kzg-ceremony-alt
 ====================
 
 Usage of ./kzgceremony:
-  -u, --url string       sequencer url (default "https://kzg-ceremony-sequencer-dev.fly.dev")
-  -r, --rand string      randomness
-  -s, --sleeptime uint   time (seconds) sleeping before trying again to be the next contributor (default 10)
+  -u, --url string       sequencer url (default "https://seq.ceremony.ethereum.org")
+  -r, --rand string      randomness, needs to be bigger than 64 bytes
+  -s, --sleeptime uint   time (seconds) sleeping before trying again to be the next contributor (default 30)
 ```
 
 So for example, run your contribution with:

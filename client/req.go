@@ -132,38 +132,47 @@ func (c *Client) PostAuthCallback() (*MsgRequestLink, error) {
 	return &msg, err
 }
 
-func (c *Client) PostTryContribute(sessionID string) (*kzgceremony.BatchContribution, bool, error) {
+type Status int
+
+const (
+	StatusReauth = Status(iota)
+	StatusError
+	StatusWait
+	StatusProceed
+)
+
+func (c *Client) PostTryContribute(sessionID string) (*kzgceremony.BatchContribution, Status, error) {
 	bearer := "Bearer " + sessionID
 	resp, err := c.postWithAuth(
 		c.url+"/lobby/try_contribute", "application/json", nil, bearer)
 	if err != nil {
-		return nil, false, err
+		return nil, StatusError, err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, false, err
+		return nil, StatusError, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		fmt.Println(string(body))
 		switch resp.StatusCode {
 		case http.StatusBadRequest:
-			return nil, true, fmt.Errorf("call came to early. rate limited")
+			return nil, StatusWait, fmt.Errorf("call came to early. rate limited")
 		case http.StatusUnauthorized:
-			return nil, false, fmt.Errorf("unkown session id. unauthorized access")
+			return nil, StatusReauth, fmt.Errorf("unkown session id. unauthorized access")
 		default:
-			return nil, false, fmt.Errorf("unexpected http code: %d", resp.StatusCode)
+			return nil, StatusWait, fmt.Errorf("unexpected http code: %d", resp.StatusCode)
 		}
 	}
 
 	err = ioutil.WriteFile("prevBatchContribution.json", body, 0600)
 	if err != nil {
-		return nil, false, err
+		return nil, StatusError, err
 	}
 	bc := &kzgceremony.BatchContribution{}
 	err = json.Unmarshal(body, bc)
-	return bc, false, err
+	return bc, StatusError, err
 }
 
 func (c *Client) PostAbortContribution(sessionID string) ([]byte, error) {

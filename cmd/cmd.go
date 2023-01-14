@@ -15,26 +15,28 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
+var (
+	redB   = color.New(color.FgRed, color.Bold)
+	cyan   = color.New(color.FgCyan)
+	cyanB  = color.New(color.FgCyan, color.Bold)
+	green  = color.New(color.FgHiGreen)
+	greenB = color.New(color.FgHiGreen, color.Bold)
+)
+
 func main() {
 	fmt.Println("eth-kzg-ceremony-alt")
 	fmt.Printf("====================\n")
 	fmt.Printf("            https://github.com/arnaucube/eth-kzg-ceremony-alt\n\n")
 
-	redB := color.New(color.FgRed, color.Bold)
-	cyan := color.New(color.FgCyan)
-	cyanB := color.New(color.FgCyan, color.Bold)
-	green := color.New(color.FgHiGreen)
-	greenB := color.New(color.FgHiGreen, color.Bold)
-
 	var sequencerURL string
 	var randomness string
 	var sleepTime uint64
 	flag.StringVarP(&sequencerURL, "url", "u",
-		"https://sequencer.ceremony.ethereum.org", "sequencer url")
+		"https://seq.ceremony.ethereum.org", "sequencer url")
 	flag.StringVarP(&randomness, "rand", "r",
-		"", fmt.Sprintf("randomness, needs to be bigger than %d", kzgceremony.MinRandomnessLen))
+		"", fmt.Sprintf("randomness, needs to be bigger than %d bytes", kzgceremony.MinRandomnessLen))
 	flag.Uint64VarP(&sleepTime, "sleeptime", "s",
-		10, "time (seconds) sleeping before trying again to be the next contributor")
+		30, "time (seconds) sleeping before trying again to be the next contributor")
 
 	flag.CommandLine.SortFlags = false
 	flag.Parse()
@@ -61,25 +63,8 @@ func main() {
 	}
 
 	// Auth
-	msgReqLink, err := c.GetRequestLink()
-	if err != nil {
-		printErrAndExit(err)
-	}
-
-	_, _ = green.Printf("Please go to\n%s\n and authenticate with Github.\n", msgReqLink.GithubAuthURL)
-	fmt.Println("(currently only Github auth is supported)")
-
-	_, _ = greenB.Printf("Paste here the RawData from the auth answer:\n")
-	s, err := readInput()
-	if err != nil {
-		printErrAndExit(err)
-	}
-	var authMsg client.MsgAuthCallback
-	if err = json.Unmarshal([]byte(s), &authMsg); err != nil {
-		printErrAndExit(err)
-	}
-	fmt.Print("Parsed auth msg: ")
-	_, _ = cyan.Printf("%#v\n", authMsg)
+	fmt.Println("Github Authorization:")
+	authMsg := authGH(c)
 
 	// TODO this will be only triggered by a flag
 	// msg, err := c.PostAbortContribution(authMsg.SessionID)
@@ -94,16 +79,27 @@ func main() {
 	var prevBatchContribution *kzgceremony.BatchContribution
 	for {
 		fmt.Printf("%s sending try_contribute\n", time.Now().Format("2006-01-02 15:04:05"))
-		var retry bool
-		prevBatchContribution, retry, err = c.PostTryContribute(authMsg.SessionID)
+		var status client.Status
+		prevBatchContribution, status, err = c.PostTryContribute(authMsg.SessionID)
 		if err != nil {
 			_, _ = cyan.Println(err)
 		}
-		if !retry {
+		if status == client.StatusProceed {
 			break
 		}
-		fmt.Printf("%s try_contribute unsuccessful, going to sleep %d seconds\n",
-			time.Now().Format("2006-01-02 15:04:05"), sleepTime)
+		if status == client.StatusReauth {
+			fmt.Println("SessionID has expired, authenticate again with Github:")
+			authMsg = authGH(c)
+		}
+		msgStatus, err := c.GetCurrentStatus()
+		if err != nil {
+			printErrAndExit(err)
+		}
+		fmt.Printf("%s try_contribute unsuccessful, lobby size %d, num contrib %d,"+
+			"\n    going to sleep %d seconds\n",
+			time.Now().Format("2006-01-02 15:04:05"),
+			msgStatus.LobbySize, msgStatus.NumContributions,
+			sleepTime)
 		time.Sleep(time.Duration(sleepTime) * time.Second)
 	}
 
@@ -115,10 +111,13 @@ func main() {
 	// }
 
 	fmt.Println("starting to compute new contribution")
+	t0 := time.Now()
 	newBatchContribution, err := prevBatchContribution.Contribute([]byte(randomness))
 	if err != nil {
 		printErrAndExit(err)
 	}
+	fmt.Println("Contribution computed in", time.Since(t0))
+
 	// store contribution
 	fmt.Println("storing contribution.json")
 	b, err := json.Marshal(newBatchContribution)
@@ -149,6 +148,29 @@ func main() {
 	if err != nil {
 		printErrAndExit(err)
 	}
+}
+
+func authGH(c *client.Client) client.MsgAuthCallback {
+	msgReqLink, err := c.GetRequestLink()
+	if err != nil {
+		printErrAndExit(err)
+	}
+
+	_, _ = green.Printf("Please go to\n%s\n and authenticate with Github.\n", msgReqLink.GithubAuthURL)
+	fmt.Println("(currently only Github auth is supported)")
+
+	_, _ = greenB.Printf("Paste here the RawData from the auth answer:\n")
+	s, err := readInput()
+	if err != nil {
+		printErrAndExit(err)
+	}
+	var authMsg client.MsgAuthCallback
+	if err = json.Unmarshal([]byte(s), &authMsg); err != nil {
+		printErrAndExit(err)
+	}
+	fmt.Print("Parsed auth msg: ")
+	_, _ = cyan.Printf("%#v\n", authMsg)
+	return authMsg
 }
 
 func printErrAndExit(err error) {

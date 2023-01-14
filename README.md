@@ -20,7 +20,7 @@ Documents used for this implementation:
 - [*Why and how zkSNARKs work*, by Maksym Petkus](https://arxiv.org/abs/1906.07221v1)
 
 
-You can find more info on the logic behind the powers of tau computation & verification in these notes: http://arnaucube.com/blog/powersoftau.html
+**You can find more info on the logic behind the powers of tau computation & verification in these notes: http://arnaucube.com/blog/powersoftau.html**
 
 ### Usage
 Get the binary from the [releases](https://github.com/arnaucube/eth-kzg-ceremony-alt/releases) (alternative you can compile it from source), and run:

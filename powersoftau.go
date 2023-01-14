@@ -231,9 +231,10 @@ func checkG2PointCorrectness(p *bls12381.PointG2) error {
 	return nil
 }
 
-// Verify checks the correct computation of the new SRS respectively from the
-// previous SRS
-func Verify(prevSRS, newSRS *SRS, proof *Proof) bool {
+// VerifyNewSRSFromPrevSRS checks the correct computation of the new SRS
+// respectively from the previous SRS. These are the checks that the Sequencer
+// would do.
+func VerifyNewSRSFromPrevSRS(prevSRS, newSRS *SRS, proof *Proof) bool {
 	pairing := bls12381.NewEngine()
 
 	// 1. check that elements of the newSRS are valid points
@@ -277,6 +278,61 @@ func Verify(prevSRS, newSRS *SRS, proof *Proof) bool {
 		eR := pairing.AddPair(g1.One(), newSRS.G2Powers[i+1]).Result()
 		if !eL.Equal(eR) {
 			return false
+		}
+	}
+
+	return true
+}
+
+// VerifyState acts similarly to VerifyNewSRSFromPrevSRS, but verifying the
+// given State (which can be obtained from the Sequencer)
+func VerifyState(s *State) bool {
+	pairing := bls12381.NewEngine()
+
+	for _, t := range s.Transcripts {
+		// 1. check that elements of the SRS are valid points
+		for i := 0; i < len(t.PowersOfTau.G1Powers); i++ {
+			if err := checkG1PointCorrectness(t.PowersOfTau.G1Powers[i]); err != nil {
+				return false
+			}
+		}
+		for i := 0; i < len(t.PowersOfTau.G2Powers); i++ {
+			if err := checkG2PointCorrectness(t.PowersOfTau.G2Powers[i]); err != nil {
+				return false
+			}
+		}
+
+		// 2. check t.Witness.RunningProducts[last] == t.PowersOfTau.G1Powers[1]
+		if !g1.Equal(t.Witness.RunningProducts[len(t.Witness.RunningProducts)-1],
+			t.PowersOfTau.G1Powers[1]) {
+			return false
+		}
+
+		// 3. check newSRS.G1s[1] (g₁^τ'), is correctly related to prevSRS.G1s[1] (g₁^τ)
+		//   e([τ]₁, [p]₂) == e([τ']₁, [1]₂)
+		eL := pairing.AddPair(t.Witness.RunningProducts[len(t.Witness.RunningProducts)-2], t.Witness.PotPubKeys[len(t.Witness.PotPubKeys)-1]).Result()
+		eR := pairing.AddPair(t.Witness.RunningProducts[len(t.Witness.RunningProducts)-1], g2.One()).Result()
+		if !eL.Equal(eR) {
+			return false
+		}
+
+		// 4. check newSRS following the powers of tau structure
+		for i := 0; i < len(t.PowersOfTau.G1Powers)-1; i++ {
+			// i) e([τ'ⁱ]₁, [τ']₂) == e([τ'ⁱ⁺¹]₁, [1]₂), for i ∈ [1, n−1]
+			eL := pairing.AddPair(t.PowersOfTau.G1Powers[i], t.PowersOfTau.G2Powers[1]).Result()
+			eR := pairing.AddPair(t.PowersOfTau.G1Powers[i+1], g2.One()).Result()
+			if !eL.Equal(eR) {
+				return false
+			}
+		}
+
+		for i := 0; i < len(t.PowersOfTau.G2Powers)-1; i++ {
+			// ii) e([τ']₁, [τ'ʲ]₂) == e([1]₁, [τ'ʲ⁺¹]₂), for j ∈ [1, m−1]
+			eL := pairing.AddPair(t.PowersOfTau.G1Powers[1], t.PowersOfTau.G2Powers[i]).Result()
+			eR := pairing.AddPair(g1.One(), t.PowersOfTau.G2Powers[i+1]).Result()
+			if !eL.Equal(eR) {
+				return false
+			}
 		}
 	}
 

@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	red    = color.New(color.FgRed)
 	redB   = color.New(color.FgRed, color.Bold)
 	cyan   = color.New(color.FgCyan)
 	cyanB  = color.New(color.FgCyan, color.Bold)
@@ -114,6 +115,7 @@ func main() {
 	t0 := time.Now()
 	newBatchContribution, err := prevBatchContribution.Contribute([]byte(randomness))
 	if err != nil {
+		fmt.Println("error on prevBatchContribution.Contribute")
 		printErrAndExit(err)
 	}
 	fmt.Println("Contribution computed in", time.Since(t0))
@@ -122,11 +124,13 @@ func main() {
 	fmt.Println("storing contribution.json")
 	b, err := json.Marshal(newBatchContribution)
 	if err != nil {
-		printErrAndExit(err)
+		// print error but do not exit
+		_, _ = red.Println(err)
 	}
 	err = ioutil.WriteFile("contribution.json", b, 0600)
 	if err != nil {
-		printErrAndExit(err)
+		// print error but do not exit
+		_, _ = red.Println(err)
 	}
 
 	// send contribution
@@ -174,7 +178,6 @@ func authGH(c *client.Client) client.MsgAuthCallback {
 }
 
 func printErrAndExit(err error) {
-	red := color.New(color.FgRed)
 	_, _ = red.Println(err)
 	os.Exit(1)
 }

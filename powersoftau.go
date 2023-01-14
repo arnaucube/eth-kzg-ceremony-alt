@@ -138,7 +138,7 @@ func newEmptySRS(nG1, nG2 int) *SRS {
 }
 
 func tau(round int, randomness []byte) *toxicWaste {
-	val := blake2b.Sum256(randomness)
+	val := blake2b.Sum256(append(randomness, byte(round)))
 	tau := new(big.Int).Mod(
 		new(big.Int).SetBytes(val[:]),
 		g2.Q())
@@ -181,7 +181,8 @@ func genProof(toxicWaste *toxicWaste, prevSRS, newSRS *SRS) *Proof {
 // byte slice, and returns the new SRS together with the Proof
 func Contribute(prevSRS *SRS, round int, randomness []byte) (*SRS, *Proof, error) {
 	if len(randomness) < MinRandomnessLen {
-		return nil, nil, fmt.Errorf("err randomness") // WIP
+		return nil, nil, fmt.Errorf("err: randomness length < %d",
+			MinRandomnessLen)
 	}
 	// set tau from randomness
 	tw := tau(round, randomness)

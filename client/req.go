@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	kzgceremony "github.com/arnaucube/eth-kzg-ceremony-alt"
 )
@@ -155,7 +156,6 @@ func (c *Client) PostTryContribute(sessionID string) (*kzgceremony.BatchContribu
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println(string(body))
 		switch resp.StatusCode {
 		case http.StatusBadRequest:
 			return nil, StatusWait, fmt.Errorf("call came to early. rate limited")
@@ -166,13 +166,26 @@ func (c *Client) PostTryContribute(sessionID string) (*kzgceremony.BatchContribu
 		}
 	}
 
+	// note: a 200 (Ok) code by the Sequencer on try_contribute doesn't
+	// mean that the contributor has been selected. It could mean that the
+	// Sequencer is returning the error AnotherContributionInProgress in a
+	// json msg (see
+	// https://github.com/ethereum/kzg-ceremony-sequencer/blob/2538f2f08d4db880d7f4608e964df0b695bc7d2f/src/api/v1/error_response.rs#L105
+	// )
+
+	// check if body contains the error message of "another contribution in
+	// progress" (despite http statuscode being 200 (Ok))
+	if strings.Contains(string(body), "another contribution in progress") {
+		return nil, StatusWait, fmt.Errorf("another contribution in progress")
+	}
+
 	err = ioutil.WriteFile("prevBatchContribution.json", body, 0600)
 	if err != nil {
 		return nil, StatusError, err
 	}
 	bc := &kzgceremony.BatchContribution{}
 	err = json.Unmarshal(body, bc)
-	return bc, StatusError, err
+	return bc, StatusProceed, err
 }
 
 func (c *Client) PostAbortContribution(sessionID string) ([]byte, error) {

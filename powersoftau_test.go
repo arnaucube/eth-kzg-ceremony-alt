@@ -57,6 +57,11 @@ func TestBatchContribution(t *testing.T) {
 		bc.Contribute([]byte("1111111111111111111111111111111111111111111111111111111111111111"))
 	c.Assert(err, qt.IsNil)
 
+	c.Assert(len(nb.Contributions), qt.Equals, 4)
+	c.Assert(g2.Equal(nb.Contributions[0].PotPubKey, nb.Contributions[1].PotPubKey), qt.IsFalse)
+	c.Assert(g2.Equal(nb.Contributions[0].PotPubKey, nb.Contributions[2].PotPubKey), qt.IsFalse)
+	c.Assert(g2.Equal(nb.Contributions[0].PotPubKey, nb.Contributions[3].PotPubKey), qt.IsFalse)
+
 	_, err = json.Marshal(nb)
 	c.Assert(err, qt.IsNil)
 }
